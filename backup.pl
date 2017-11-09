@@ -16,12 +16,12 @@ use feature 'lexical_subs';
 
 use Config::Auto;
 use MIME::Lite;
-use Data::Dumper;
+use POSIX;
 
 use constant SSH_OPTS => '-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no';
-use constant LOG_FILE => '/var/log/backuper.log'
-use constant ROTATE_PERIODS => qw(day week month year)
-use constant ROTATE_ALL => -1
+use constant LOG_FILE => '/var/log/backuper.log';
+use constant ROTATE_PERIODS => qw(day week month year);
+use constant ROTATE_ALL => -1;
 
 my sub trim;
 my sub is_abs;
@@ -61,7 +61,6 @@ sub load_conf {
             $rotate_conf{$period} = $value;
         }
 
-        my %rotate_conf;
         die "No email configuration is provided" unless defined($conf->{'email'});
         die "Missing use_email value" unless defined($conf->{'email'}->{'use_email'});
         if($conf->{'email'}->{'use_email'} =~ /(1|on|ok|active|yes|true)/i) {
@@ -80,17 +79,18 @@ sub load_conf {
         die "No dest folder configuration is provided" unless defined($conf->{'common'}->{'dest_folder'});
         our $common_dest_folder = $conf->{'common'}->{'dest_folder'};
         die "No rotate folder configuration is provided" unless defined($conf->{'common'}->{'rotate_folder'});
-        our $common_rotate_folder = $conf->{'common'}->{'rotate_folder'}
+        our $common_rotate_folder = $conf->{'common'}->{'rotate_folder'};
         die "No ssh user configuration is provided" unless defined($conf->{'common'}->{'ssh_user'});
         our $common_ssh_user = $conf->{'common'}->{'ssh_user'};
         die "No db user configuration is provided" unless defined($conf->{'common'}->{'db_user'});
-        our $common_db_user = $conf->{'common'}->{'db user'}
+        our $common_db_user = $conf->{'common'}->{'db_user'};
 
         undef $conf->{'email'};
         undef $conf->{'rotate'};
         undef $conf->{'common'};
 
-        return ($conf, \%rotate_conf);
+        my %result = ('servers' => $conf, 'rotate' => \%rotate_conf);
+        return \%result;
         1;
     }
     or do {
@@ -107,7 +107,9 @@ sub load_conf {
 }
 
 sub main {
-    my ($conf, $rotate_conf) = load_conf();
+    my $result = load_conf();
+    my $servers_conf = $result->{'servers'};
+    my $rotate_conf = $result->{'rotate'};
 
     eval {
         check_free_space();
@@ -118,7 +120,7 @@ sub main {
     };
 
     eval {
-        rotate_old_backups($conf);
+        rotate_old_backups($rotate_conf);
         1;
     }
     or do {
@@ -126,7 +128,7 @@ sub main {
     };
 
     eval {
-        backup($conf);
+        backup($servers_conf);
         1;        
     }
     or do {
@@ -142,10 +144,92 @@ sub check_free_space {
     alert "only $space GigaBytes availables for backups" if $space < 50; 
 }
 
+sub elapsed_since {
+    my ($now, $since) = @_;
+    my @time = gmtime($now);
+    
+    my $nbr_sec_since_day = ($time[2] * 3600) + ($time[1] * 60) + $time[0];
+    return $nbr_sec_since_day if $since eq 'day';
+    
+    if($since eq 'week') {
+        my $dow_sec = int(POSIX::strftime("%u", @time))*(24*3600);
+        return $nbr_sec_since_day if $dow_sec <= 24*3600;
+        return $dow_sec + $nbr_sec_since_day - (24*3600);
+    }
+    return $time[3]*(24*3600) + $nbr_sec_since_day if $since eq 'month';
+    return int(POSIX::strftime("%j", @time))*(24*3600) + $nbr_sec_since_day if $since eq 'year';
+    die "Unknown time reference $since";
+}
+
 sub rotate_old_backups {
     my ($conf) = @_;
-
     
+    # Generate the valid dates of archives we shouln't destroy
+    my $now = time();
+    my @keep = ();
+    my $nbr_days = $conf->{'day'} == ROTATE_ALL ? 7 : $conf->{'day'};
+    for(my $i = 0; $i < $nbr_days; $i++) {
+        push @keep, POSIX::strftime("%Y%m%d", gmtime($now-elapsed_since($now, 'day')-($i*24*3600)));
+    }
+    my $nbr_weeks = $conf->{'week'} == ROTATE_ALL ? 4 : $conf->{'week'};
+    for(my $i = 0; $i < $nbr_weeks; $i++) {
+        push @keep, POSIX::strftime("%Y%m%d", gmtime($now-(86400*$i*7)-elapsed_since($now, 'week')+1));
+    }
+    my $nbr_month = $conf->{'month'} == ROTATE_ALL ? 12 : $conf->{'month'};
+    my $this_year = int(POSIX::strftime("%Y", gmtime));
+    my $this_month = int(POSIX::strftime("%m", gmtime));
+    for(my $i = 0; $i < $nbr_month; $i++) {
+        my $nbr_monthes = $this_year*12 + ($this_month - $i); 
+        push @keep, sprintf("%04d%02d01", int($nbr_monthes/12), $nbr_monthes %12);
+    } 
+    if($conf->{'year'} != ROTATE_ALL) {
+        for(my $i = 0; $i < $conf->{'year'}; $i++) {
+            push @keep, ($this_year - $i)."0101";
+        }
+    }
+
+    # Check if we should remove the archive
+    opendir(my $past_folder, $common_rotate_folder) or die "Unable to read folder $common_rotate_folder";
+    while(my $file = readdir($past_folder)) {
+        next if ($file =~ /^..?$/);  # skip . and ..
+        next unless -f $file;
+        next unless $file =~ /^([0-9]{8})_.*$/;
+
+        my $date = $1;
+        next if grep { $_ == $date } @keep;
+        next if $date =~ /0101$/ and $conf->{'year'} == ROTATE_ALL;
+
+        unlink $file;
+    }
+    close($past_folder);
+    
+    my $today = POSIX::strftime("%Y%m%d", gmtime($now));
+
+    # move current backup to new archive
+    opendir(my $dest_folder, $common_dest_folder) or die "Unable to read folder $common_dest_folder";
+    while(my $file = readdir($dest_folder)) {
+        next if ($file =~ /^..?$/);  # skip . and ..
+        
+        my $dest = "$common_dest_folder/${today}_$file";
+        $dest .= ".tgz" if -d "$common_dest_folder/$file";
+        
+        if(-f "$common_dest_folder/$file") {
+            unlink $dest if -e $dest;
+            my $cmd = "mv '$common_dest_folder/$file' '$dest' 2>&1";
+            my $output = qx/$cmd/;
+            die "copy failed: ".$output if $? != 0;
+        }
+        elsif(-d "$common_dest_folder/$file") {
+            unlink $dest if -e $dest;
+            my $cmd = "(cd '$common_dest_folder'; tar -zcf '$dest' '$file' 2>&1)";
+            my $output = qx/$cmd/;
+            die "copy failed: ".$output if $? != 0;
+        }
+        else {
+            die "don't known what to do with '$common_dest_folder/$file'";
+        }        
+    }
+    close($dest_folder);
 }
 
 sub backup {
@@ -164,7 +248,7 @@ sub backup {
                 eval {
                     my $src_path = $conf->{$server}->{'files'}->{$archive};
                     my @local_excluded = grep { begins_with($_, $src_path) } @excluded;
-                    # backup_files($server, $prefix, $archive, $src_path, \@local_excluded);
+                    backup_files($server, $prefix, $archive, $src_path, \@local_excluded);
                     1;
                 }
                 or do {
@@ -196,8 +280,8 @@ sub backup_files {
     foreach my $exclusion (@{$excluded}) {
         $cmd .= " --exclude='".substr($exclusion, length($path))."' ";
     }
-    $cmd .= " '$common_ssh_user\@$server:/$path/' '$common_dest_folder/$prefix$archive/'";
-    my $output = qx/$cmd 2>&1/;
+    $cmd .= " '$common_ssh_user\@$server:/$path/' '$common_dest_folder/$prefix$archive/' 2>&1";
+    my $output = qx/$cmd/;
     $output = "" unless defined($output);
     die "Rsync failed: ".$output if $? != 0;
 }
@@ -208,7 +292,7 @@ sub backup_database {
     if($db_engine eq "mysql") {
         my $cmd = "ssh ".SSH_OPTS." '$common_ssh_user\@$server' 'mysqldump -u \"$common_db_user\" ";
         $cmd .= " -h localhost \"--port=$port\" --databases \"$db_name\" | gzip'";
-        $cmd .= " 2>&1 1>'$common_dest_folder/$prefix$archive.sql.gz";
+        $cmd .= " 2>&1 1>'$common_dest_folder/$prefix$archive.sql.gz'";
         my $output = qx/$cmd/;
         $output = "" unless defined($output);
         die "Database backup failed: ".$output if $? != 0;
@@ -224,7 +308,7 @@ sub alert {
     $msg .= "\n".$! if defined($!) and length($!);
     $msg .= "\n".$@ if defined($@) and length($@);
 
-    open(my $log_fh, ">>", LOG);
+    open(my $log_fh, ">>", LOG_FILE);
     printf $log_fh "[%12s] ERROR: ", time;
     print $log_fh $msg;
     print $log_fh "\n";
@@ -237,7 +321,7 @@ sub alert {
         Subject => "Backup Error",
         Data    => $msg
     );
-    $mail->send('smtp', $email_smtp_server, AuthUser=>$email_smtp_email, AuthPass=>$email_smtp_pwd);
+    $mail->send('smtp', $email_smtp_server, AuthUser=>$email_smtp_user, AuthPass=>$email_smtp_pwd);
     return 1;
 }
 

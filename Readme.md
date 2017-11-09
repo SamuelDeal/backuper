@@ -12,3 +12,8 @@ Some requirement on backup server:
 apt-get install libconfig-auto-perl libmime-lite-perl rsync libauthen-sasl-perl libmime-base64-urlsafe-perl
 
 
+
+Database user should have the right to read every backuped table
+example:
+GRANT SELECT, SHOW VIEW, TRIGGER, LOCK TABLES, PROCESS, REPLICATION CLIENT ON *.* TO 'backuper'@'localhost';
+
