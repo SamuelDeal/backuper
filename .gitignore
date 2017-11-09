@@ -1,0 +1,7 @@
+.*
+!.gitignore
+!.keep
+
+backup.config
+current
+past

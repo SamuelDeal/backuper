@@ -1,0 +1,34 @@
+# Yaml config file for backup
+
+rotate:
+  day: 2
+  week: 2
+  month: 3
+  year: all
+
+email:
+  use_email: 1
+  sysadmin_email: 'youremail@yourdomain.tld'
+  backup_email: 'backup@yourdomain.tld'
+  smtp_user: 'smtp@yourdomain.tld'
+  smtp_pwd: 'XXXXXXXXXXXXXXXXXX'
+  smtp_server: 'smtp.yourdomain.tld'
+
+common:
+  dest_folder: '/home/backups/current'
+  rotate_folder: '/home/backups/past'
+  ssh_user: 'backuper'
+  db_user: 'backuper'
+
+abc.yourdomain.tld:
+  prefix: abc_
+  files:
+    var_www: /var/www
+    data: /data
+    etc: /etc
+    exclude:
+      - /etc/ssh
+  databases:
+    wordpress: 'mysql:3006:wordpress'
+    prestashop: 'mysql:3006:prestashop'
+      
