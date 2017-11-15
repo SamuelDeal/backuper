@@ -27,6 +27,7 @@ my sub trim;
 my sub is_abs;
 my sub alert;
 my sub begins_with;
+my sub log_info;
 
 our $common_dest_folder;
 our $common_rotate_folder;
@@ -107,6 +108,8 @@ sub load_conf {
 }
 
 sub main {
+    log_info "Starting backup";
+
     my $result = load_conf();
     my $servers_conf = $result->{'servers'};
     my $rotate_conf = $result->{'rotate'};
@@ -134,6 +137,8 @@ sub main {
     or do {
         return alert "Unable to do all backups";
     };
+
+    log_info "Backup finished successfully";
 }
 
 sub check_free_space {
@@ -206,11 +211,11 @@ sub rotate_old_backups {
     my $today = POSIX::strftime("%Y%m%d", gmtime($now));
 
     # move current backup to new archive
-    opendir(my $dest_folder, $common_dest_folder) or die "Unable to read folder $common_dest_folder";
+    opendir(my $dest_folder, $common_rotate_folder) or die "Unable to read folder $common_rotate_folder";
     while(my $file = readdir($dest_folder)) {
         next if ($file =~ /^..?$/);  # skip . and ..
         
-        my $dest = "$common_dest_folder/${today}_$file";
+        my $dest = "$common_rotate_folder/${today}_$file";
         $dest .= ".tgz" if -d "$common_dest_folder/$file";
         
         if(-f "$common_dest_folder/$file") {
@@ -275,6 +280,7 @@ sub backup {
 sub backup_files {
     my ($server, $prefix, $archive, $path, $excluded) = @_;
     
+    log_info "starting backup of folder $path on $server";    
     $path =~ s/\/*$//;
     my $cmd = "rsync -e 'ssh ".SSH_OPTS."' --delete -a ";
     foreach my $exclusion (@{$excluded}) {
@@ -284,11 +290,13 @@ sub backup_files {
     my $output = qx/$cmd/;
     $output = "" unless defined($output);
     die "Rsync failed: ".$output if $? != 0;
+    log_info "folder $path on $server successfully backuped";
 }
 
 sub backup_database {
     my ($server, $prefix, $archive, $db_engine, $port, $db_name) = @_;
 
+    log_info "starting backup of db $db_name on $server";
     if($db_engine eq "mysql") {
         my $cmd = "ssh ".SSH_OPTS." '$common_ssh_user\@$server' 'mysqldump -u \"$common_db_user\" ";
         $cmd .= " -h localhost \"--port=$port\" --databases \"$db_name\" | gzip'";
@@ -296,6 +304,7 @@ sub backup_database {
         my $output = qx/$cmd/;
         $output = "" unless defined($output);
         die "Database backup failed: ".$output if $? != 0;
+        log_info "db $db_name on $server successfully backuped";
     }
     else {
         die "unknown database engine '$db_engine'";
@@ -323,6 +332,16 @@ sub alert {
     );
     $mail->send('smtp', $email_smtp_server, AuthUser=>$email_smtp_user, AuthPass=>$email_smtp_pwd);
     return 1;
+}
+
+sub log_info {
+    my $msg = join("\n", grep({ defined($_) } @_)); 
+    
+    open(my $log_fh, ">>", LOG_FILE);
+    printf $log_fh "[%12s] INFO: ", time;
+    print $log_fh $msg;
+    print $log_fh "\n";
+    close($log_fh);
 }
 
 sub trim {
