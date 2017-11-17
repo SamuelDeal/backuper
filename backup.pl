@@ -211,7 +211,7 @@ sub rotate_old_backups {
     my $today = POSIX::strftime("%Y%m%d", gmtime($now));
 
     # move current backup to new archive
-    opendir(my $dest_folder, $common_rotate_folder) or die "Unable to read folder $common_rotate_folder";
+    opendir(my $dest_folder, $common_dest_folder) or die "Unable to read folder $common_dest_folder";
     while(my $file = readdir($dest_folder)) {
         next if ($file =~ /^..?$/);  # skip . and ..
         
@@ -290,6 +290,8 @@ sub backup_files {
     my $output = qx/$cmd/;
     $output = "" unless defined($output);
     die "Rsync failed: ".$output if $? != 0;
+    my $touch_cmd = "touch '$common_dest_folder/$prefix$archive/.date'";
+    qx/$touch_cmd/;
     log_info "folder $path on $server successfully backuped";
 }
 
