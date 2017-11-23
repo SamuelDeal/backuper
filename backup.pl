@@ -3,7 +3,7 @@
 # -------------------------------------------
 # Install instructions on debian:
 #
-# apt-get install libconfig-auto-perl libmime-lite-perl rsync libauthen-sasl-perl libmime-base64-urlsafe-perl
+# apt-get install libconfig-auto-perl libmime-lite-perl rsync libauthen-sasl-perl libmime-base64-urlsafe-perl pigz
 #
 #
 
@@ -227,13 +227,13 @@ sub rotate_old_backups {
         }
         elsif(-d "$common_dest_folder/$file") {
             unlink $dest if -e $dest;
-            my $cmd = "(cd '$common_dest_folder'; tar -zcf '$dest' '$file' 2>&1)";
+            my $cmd = "nice -2 tar -c --use-compress-program=pigz -C '$common_dest_folder' -f '$dest' '$file' 2>&1";
             my $output = qx/$cmd/;
             die "copy failed: ".$output if $? != 0;
         }
         else {
             die "don't known what to do with '$common_dest_folder/$file'";
-        }        
+        }
     }
     close($dest_folder);
 }
@@ -291,7 +291,7 @@ sub backup_files {
     my $output = qx/$cmd/;
     $output = "" unless defined($output);
     die "Rsync failed: ".$output if $? != 0;
-    my $touch_cmd = "touch '$common_dest_folder/$prefix$archive/.date'";
+    my $touch_cmd = "touch '$common_dest_folder/$prefix$archive/.backup_date'";
     qx/$touch_cmd/;
     log_info "folder $path on $server successfully backuped";
 }
