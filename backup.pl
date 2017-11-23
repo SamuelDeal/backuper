@@ -197,14 +197,15 @@ sub rotate_old_backups {
     opendir(my $past_folder, $common_rotate_folder) or die "Unable to read folder $common_rotate_folder";
     while(my $file = readdir($past_folder)) {
         next if ($file =~ /^..?$/);  # skip . and ..
-        next unless -f $file;
+        next unless -f "$common_rotate_folder/$file";
         next unless $file =~ /^([0-9]{8})_.*$/;
 
         my $date = $1;
         next if grep { $_ == $date } @keep;
         next if $date =~ /0101$/ and $conf->{'year'} == ROTATE_ALL;
 
-        unlink $file;
+        log_info "removing old backup $file";
+        unlink "$common_rotate_folder/$file";
     }
     close($past_folder);
     
