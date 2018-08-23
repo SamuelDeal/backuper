@@ -108,6 +108,8 @@ sub load_conf {
 }
 
 sub main {
+    $ENV{'LC_ALL'} = 'en_US.UTF-8';
+    
     log_info "Starting backup";
 
     my $result = load_conf();
