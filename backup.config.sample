@@ -31,4 +31,6 @@ abc.yourdomain.tld:
   databases:
     wordpress: 'mysql:3006:wordpress'
     prestashop: 'mysql:3006:prestashop'
+    other: 'postgres:5432:other'
+    chat: 'mongo:27017:local'
       

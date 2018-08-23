@@ -309,6 +309,24 @@ sub backup_database {
         die "Database backup failed: ".$output if $? != 0;
         log_info "db $db_name on $server successfully backuped";
     }
+    elsif($db_engine eq "mongo") {
+        my $cmd = "ssh ".SSH_OPTS." '$common_ssh_user\@$server' 'mongodump --archive --gzip ";
+        $cmd .= " --host localhost \"--port=$port\" --db \"$db_name\"'";
+        $cmd .= " 2>&1 1>'$common_dest_folder/$prefix$archive.mongo.gz'";
+        my $output = qx/$cmd/;
+        $output = "" unless defined($output);
+        die "Database backup failed: ".$output if $? != 0;
+        log_info "db $db_name on $server successfully backuped";
+    }
+    elsif($db_engine eq "postgres") {
+        my $cmd = "ssh ".SSH_OPTS." '$common_ssh_user\@$server' 'pg_dump ";
+        $cmd .= " -h localhost -p \"$port\" -d \"$db_name\" | gzip '";
+        $cmd .= " 2>&1 1>'$common_dest_folder/$prefix$archive.sql.gz'";
+        my $output = qx/$cmd/;
+        $output = "" unless defined($output);
+        die "Database backup failed: ".$output if $? != 0;
+        log_info "db $db_name on $server successfully backuped";        
+    }
     else {
         die "unknown database engine '$db_engine'";
     }
