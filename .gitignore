@@ -1,7 +1,16 @@
+# Ignore all hidden files
 .*
-!.gitignore
+
+# Explicitly specify which hidden file we want
+/!.gitignore
+/!.gitattributes
+/!.editorconfig
 !.keep
 
-backup.config
-current
-past
+# Python cache
+__pycache__
+*.py[cod]
+
+# Project specific ignores
+conf_examples/default/servers-enabled/*
+conf_tests/*

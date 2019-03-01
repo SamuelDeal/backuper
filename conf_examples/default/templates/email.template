@@ -1,0 +1,14 @@
+Backup report: {%- if report.issue_count > 0-%}
+  {{report.issue_count}} errors
+{%- elif report.warning_count > 0 -%}
+  {{report.warning_count}} warnings
+{%- else -%}
+  success
+{%- endif -%}
+
+{% for server, info_list in report.by_server.items() %}
+  {{server}}:
+  {%- for info in info_list -%}
+    {{info['level']}}: {{info['info']}}
+  {%- endfor -%}
+{% endfor %}

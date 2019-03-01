@@ -1,36 +1,67 @@
 # Yaml config file for backup
+# If you don't have python3-yaml installed, you can use json format instead
 
-rotate:
-  day: 4 
-  week: 2
-  month: 3
-  year: all
+report:
+  - email:
+      sysadmin_email: 'youremail@yourdomain.tld'
+      backup_email: 'backup@yourdomain.tld'
+      smtp_user: 'smtp@yourdomain.tld'
+      smtp_pwd: 'XXXXXXXXXXXXXXXXXX'
+      smtp_server: 'smtp.yourdomain.tld'
+  - email:
+      sysadmin_email: 'youremail@yourdomain.tld'
+      backup_email: 'backup@yourdomain.tld'
+      smtp_user: 'smtp@yourdomain.tld'
+      smtp_pwd: 'XXXXXXXXXXXXXXXXXX'
+      smtp_server: 'smtp.yourdomain.tld'
 
-email:
-  use_email: 1
-  sysadmin_email: 'youremail@yourdomain.tld'
-  backup_email: 'backup@yourdomain.tld'
-  smtp_user: 'smtp@yourdomain.tld'
-  smtp_pwd: 'XXXXXXXXXXXXXXXXXX'
-  smtp_server: 'smtp.yourdomain.tld'
-
+# This part will be shared with all backup section configuration,
+# But this can be overwriten for a specific server
 common:
   dest_folder: '/home/backups/current'
-  rotate_folder: '/home/backups/past'
   ssh_user: 'backuper'
   db_user: 'backuper'
+  local_history:
+    folder: '/home/backups/past'
+    memory:
+      day: 4
+      week: 2
+      month: 3
+      year: all
+  aws_glacier:
+    vault: 'eu-west-1/your_vault_name'
+    memory: week
 
-abc.yourdomain.tld:
-  prefix: abc_
+# To backup local data
+local:
+  prefix: local_
   files:
-    var_www: /var/www
-    data: /data
     etc: /etc
-    exclude:
-      - /etc/ssh
-  databases:
-    wordpress: 'mysql:3006:wordpress'
-    prestashop: 'mysql:3006:prestashop'
-    other: 'postgres:5432:other'
-    chat: 'mongo:27017:local'
+
+
+# Backup config of a remote backup
+abc.yourdomain.tld:
+    prefix: abc_
+    files:
+      var_www: /var/www
+      data: /data
+      etc: /etc
+      exclude:
+        - /etc/ssh
+    databases:
+      wordpress: 'mysql:3006:wordpress'
+      other: 'postgres:5432:other'
+      chat: 'mongo:27017:local'
       
+# Another server to backup
+# You specify specific info using it as an array if you need
+def.yourdomain.tld:
+  -
+    files:
+      var_www: /var/www
+    local_history_folder: '/home/backups/another_folder'
+  - 
+    files:
+      etc: /etc
+    local_history_folder: '/home/backups/yet_another_folder'
+

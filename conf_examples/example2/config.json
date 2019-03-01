@@ -1,0 +1,46 @@
+{
+  "reports": [
+    {
+      "type": "email",
+      "subject_prefix": "[Backup] ",
+      "to": "samuel.deal@aziugo.com",
+      "sender": "backup@aziugo.com",
+      "smtp_user": "sender@aziugo.com",
+      "smtp_pwd": "~w8maj6!6729$Cd",
+      "smtp_server": "mail.gandi.net"
+    },
+    {
+      "type": "syslog"
+    },
+    {
+      "type": "file",
+      "file": "/var/log/backup.log"
+    },
+    {
+      "type": "rocketchat",
+      "webhook": "https://chat.aziugo.com/hooks/ec7KPuK6zPRhsCN7e/zj7jvNETfbLzFZwfGP8JEBoNwtRxfgw2x3yj5fLukm3PcdTL"
+    }
+  ],
+
+  "common": {
+    "dest_folder": "/home/backups/current",
+    "ssh_user": "backuper",
+    "ssh_key": "/home/sam/.ssh/id_rsa_bkp",
+    "db_user": "backuper",
+    "local_history": {
+      "folder": "/home/backups/past",
+      "memory": {
+        "day": 4,
+        "week": 2,
+        "month": "3",
+        "year": "all"
+      }
+    },
+    "aws_glacier": {
+      "vault": "eu-west-1:aziugo_backup",
+      "memory": "week"
+    }
+  },
+
+  "include": "servers/**/*.conf"
+}
