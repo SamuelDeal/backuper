@@ -729,9 +729,17 @@ class MemoryStorage(object):
     def _archive_name(self, action_fullname, extension):
         return TimeReference.get().strftime("%Y%m%d")+"_"+action_fullname+"."+extension
 
+    def is_local(self):
+        return False
+
     @property
     def small_descr(self):
         return "generic storage"
+
+    def __eq__(self, other):
+        if not isinstance(other, MemoryStorage):
+            return False
+        return self._freq == other._freq
 
 
 class LocalFolderStorage(MemoryStorage):
@@ -771,6 +779,13 @@ class LocalFolderStorage(MemoryStorage):
     def remove(self, archive_name):
         os.remove(archive_name)
 
+    def is_local(self):
+        return True
+
+    def get_local_path(self, action_fullname, extension):
+        dest_file = self._archive_name(action_fullname, extension)
+        return os.path.join(self._local_folder, dest_file)
+
     @property
     def small_descr(self):
         return "local folder " + self._local_folder
@@ -778,6 +793,11 @@ class LocalFolderStorage(MemoryStorage):
     def __str__(self):
         details = "folder: " + self._local_folder + os.linesep + to_str(self.freq)
         return "Local folder storage:" + os.linesep + indent(details)
+
+    def __eq__(self, other):
+        if not isinstance(other, LocalFolderStorage):
+            return False
+        return other._local_folder == self._local_folder and self._freq == other._freq
 
 
 class GlacierStorage(MemoryStorage):
@@ -813,6 +833,13 @@ class GlacierStorage(MemoryStorage):
         details = "vault: " + self._vault_name + os.linesep + "index_file: " + self._glacier_list_file
         details += os.linesep + to_str(self.freq)
         return "Aws glacier storage:" + os.linesep + indent(details)
+
+    def __eq__(self, other):
+        if not isinstance(other, GlacierStorage):
+            return False
+        if other._vault_name != self._vault_name:
+            return False
+        return self._glacier_list_file == other._glacier_list_file and self._freq == other._freq
 
     @property
     def _section_name(self):
@@ -1170,7 +1197,21 @@ class FileAction(Action):
         log.info(self.small_descr+": " + indent() + "data fetch")
 
         log.info(self.small_descr + ": " + indent() + "compressing data...")
-        with temp_filename(suffix=".tgz") as archive_filename:
+        local_storage = None
+        for storage in self.storage_list:
+            if storage.should_save() and storage.is_local():
+                local_storage = storage
+                break
+
+        archive_tmp_filename = None
+        archive_fd = None
+        try:
+            if local_storage:
+                archive_filename = local_storage.get_local_path(self.full_name, "tgz")
+            else:
+                archive_fd, archive_tmp_filename = tempfile.mkstemp(".tgz", "bkp_tmp_")
+                archive_filename = archive_tmp_filename
+
             cmd = ["nice", "-2", "tar", "-c"]
             if Pigz.is_installed():
                 cmd.append("--use-compress-program=pigz")
@@ -1183,9 +1224,17 @@ class FileAction(Action):
                 if not storage.should_save():
                     continue
                 log.info(self.small_descr + ": " + indent() + indent() + "saving on " + storage.small_descr + "...")
-                storage.save(archive_filename, self.full_name, "tgz")
+                if storage != local_storage:
+                    storage.save(archive_filename, self.full_name, "tgz")
                 log.info(self.small_descr + ": " + indent() + indent() + "saved on " + storage.small_descr)
             log.info(self.small_descr + ": " + indent() + "data saved")
+
+        finally:
+            if archive_fd is not None:
+                os.close(archive_fd)
+            if archive_tmp_filename is not None and os.path.exists(archive_tmp_filename):
+                os.remove(archive_tmp_filename)
+
         log.info(self.small_descr + ": Backup completed")
 
     def __str__(self):
@@ -1278,7 +1327,7 @@ class MySqlAction(DbAction):
 
     def _save_database(self, dest_file):
         dump_cmd = ['mysqldump', '-u', self._db_user, "-h", "localhost", "--port="+to_str(self._db_port),
-               '--databases', self._db_name]
+                    '--databases', self._db_name]
 
         if self.is_local:
             cmd_str = " ".join(map(shell_quote, dump_cmd)) + " | gzip > "+shell_quote(dest_file)

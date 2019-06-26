@@ -18,7 +18,7 @@ export LC_NUMERIC="en_US.UTF-8"
 export LC_PAPER="en_US.UTF-8"
 
 # Install requirements
-if which python > /dev/null 2>&1 ; then
+if which python3 > /dev/null 2>&1 ; then
 	sudo apt-get install autossh ssh-client lsof procps || exit 3
 else
 	sudo apt-get install autossh ssh-client python3 lsof procps || exit 3
