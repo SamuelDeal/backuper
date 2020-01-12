@@ -1330,10 +1330,10 @@ class MySqlAction(DbAction):
                     '--databases', self._db_name]
 
         if self.is_local:
-            cmd_str = " ".join(map(shell_quote, dump_cmd)) + " | gzip > "+shell_quote(dest_file)
+            cmd_str = "set -o pipefail; "+" ".join(map(shell_quote, dump_cmd)) + " | gzip > "+shell_quote(dest_file)
         else:
             cmd = self._get_ssh_args()
-            cmd.append(" ".join(map(shell_quote, dump_cmd)) + " | gzip")
+            cmd.append("set -o pipefail; "+" ".join(map(shell_quote, dump_cmd)) + " | gzip")
             cmd_str = " ".join(map(shell_quote, cmd)) + " > "+shell_quote(dest_file)
         pipes = subprocess.Popen(cmd_str, stderr=subprocess.PIPE, shell=True)
         std_out, std_err = pipes.communicate()
@@ -1429,10 +1429,10 @@ class PostgresAction(DbAction):
         dump_cmd = ['pg_dump', "-h", "localhost", "-p", to_str(self._db_port), "-d", self._db_name]
 
         if self.is_local:
-            cmd_str = " ".join(map(shell_quote, dump_cmd)) + " | gzip > "+shell_quote(dest_file)
+            cmd_str = "set -o pipefail; "+" ".join(map(shell_quote, dump_cmd)) + " | gzip > "+shell_quote(dest_file)
         else:
             cmd = self._get_ssh_args()
-            cmd.append(" ".join(map(shell_quote, dump_cmd)) + " | gzip")
+            cmd.append("set -o pipefail; "+" ".join(map(shell_quote, dump_cmd)) + " | gzip")
             cmd_str = " ".join(map(shell_quote, cmd)) + " > "+shell_quote(dest_file)
         pipes = subprocess.Popen(cmd_str, stderr=subprocess.PIPE, shell=True)
         std_out, std_err = pipes.communicate()
