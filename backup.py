@@ -42,6 +42,7 @@ import importlib
 import fnmatch
 import math
 import locale
+import getpass
 
 
 script_path = os.path.dirname(os.path.realpath(os.path.abspath(__file__)))
@@ -1185,7 +1186,7 @@ class FileAction(Action):
         log.info(self.small_descr+": Starting backup...")
 
         log.info(self.small_descr + ": " + indent() + "fetching data...")
-        cmd = ["rsync", "--delete", "-a"]
+        cmd = ["rsync", "--delete", "-a", "-og", "--chown="+getpass.getuser()]
         if not self.is_local:
             cmd.extend(["-e", " ".join(map(shell_quote, self._get_ssh_args(False)))])
         for exclusion in self._exclusions:
